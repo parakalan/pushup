@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils_3d/control_utils_3d.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+</head>
+
+<script type="module">
+const videoElement = document.getElementById('input_video');
+const canvasElement = document.getElementsByClassName('output_canvas')[0];
+const canvasCtx = canvasElement.getContext('2d');
+
+const pushupLandmarkConnections = [[16,14],[14,12],[12,11],[11,13],[13,15],[12,24],
+                                   [11,23],[24,23],[24,26],[23,25],[26,28],[25,27],
+                                   [28,32],[32,30],[30,28],[27,29],[29,31],[31,27]];
+
+const hipAngleLeft = [[12,24],[24,26]];
+const hipAngleRight = [[11,23],[23,25]];
+const kneeAngleLeft = [[24,26],[26,28]];
+const kneeAngleRight = [[23,25],[25,27]];
+
+// const landmarkContainer = document.getElementsByClassName('landmark-grid-container')[0];
+// const grid = new LandmarkGrid(landmarkContainer);
+
+function findAngle(p0,p1,c) {
+    var p0c = Math.sqrt(Math.pow(c.x-p0.x,2)+
+                        Math.pow(c.y-p0.y,2)); // p0->c (b)
+    var p1c = Math.sqrt(Math.pow(c.x-p1.x,2)+
+                        Math.pow(c.y-p1.y,2)); // p1->c (a)
+    var p0p1 = Math.sqrt(Math.pow(p1.x-p0.x,2)+
+                         Math.pow(p1.y-p0.y,2)); // p0->p1 (c)
+    return Math.round((180 / Math.PI) * Math.acos((p1c*p1c+p0c*p0c-p0p1*p0p1)/(2*p1c*p0c)) * 100) / 100;
+}
+
+function onResults(results) {
+  if(results.poseLandmarks) {
+    canvasCtx.save();
+    canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+    // canvasCtx.drawImage(results.segmentationMask, 0, 0,
+    //                     canvasElement.width, canvasElement.height);
+
+    // // Only overwrite existing pixels.
+    // canvasCtx.globalCompositeOperation = 'source-in';
+    // canvasCtx.fillStyle = '#00FF00';
+    // canvasCtx.fillRect(0, 0, canvasElement.width, canvasElement.height);
+
+    // Only overwrite missing pixels.
+    canvasCtx.globalCompositeOperation = 'destination-atop';
+    canvasCtx.drawImage(
+        results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+    // let pushupLandmarks = []
+    // for(var i=0; i < pushupLandmarkIndices.length; i++) {
+    //   pushupLandmarks.push(results.poseLandmarks[pushupLandmarkIndices[i]])
+    // }
+    canvasCtx.globalCompositeOperation = 'source-over';
+    drawConnectors(canvasCtx, results.poseLandmarks, pushupLandmarkConnections,
+                   {color: '#00FF00', lineWidth: 5});
+
+    document.getElementById("hipAngleLeft").innerHTML = findAngle(results.poseLandmarks[24],
+                                                                  results.poseLandmarks[12],
+                                                                  results.poseLandmarks[26])
+
+    document.getElementById("hipAngleRight").innerHTML = findAngle(results.poseLandmarks[23],
+                                                              results.poseLandmarks[11],
+                                                              results.poseLandmarks[25])
+
+    document.getElementById("kneeAngleLeft").innerHTML = findAngle(results.poseLandmarks[26],
+                                                              results.poseLandmarks[24],
+                                                              results.poseLandmarks[28])
+
+    document.getElementById("kneeAngleRight").innerHTML = findAngle(results.poseLandmarks[25],
+                                                          results.poseLandmarks[23],
+                                                          results.poseLandmarks[27])
+    // drawLandmarks(canvasCtx, results.poseLandmarks,
+    //               {color: '#FF0000', lineWidth: 2});
+    canvasCtx.restore();
+
+    // grid.updateLandmarks(results.poseWorldLandmarks);
+  }
+}
+
+const pose = new Pose({locateFile: (file) => {
+  return `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`;
+}});
+pose.setOptions({
+  modelComplexity: 2,
+  smoothLandmarks: true,
+  enableSegmentation: true,
+  smoothSegmentation: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+pose.onResults(onResults);
+
+const camera = new Camera(videoElement, {
+  onFrame: async () => {
+    await pose.send({image: videoElement});
+  },
+  width: 1280,
+  height: 720
+});
+camera.start();
+</script>
+<style type="text/css">
+  #input_video {
+    display: none;
+  }
+
+  .output_canvas {
+    margin-top: 50px;
+    margin-left: 50px;
+    border:1px solid black;
+  }
+
+  .angles {
+    margin-top: 50px;
+    float: right;
+    margin-right: 200px;
+  }
+
+  .angle {
+    padding: 7px;
+    height:  120px;
+    width: 120px;
+    font-size: 5em;
+  }
+</style>
+
+<body>
+  <div class="container">
+    <video id="input_video"></video>
+    <canvas class="output_canvas" width="1280px" height="720px"></canvas>
+    <div class="angles">
+    <div class="angle" id="hipAngleLeft"></div>
+    <div style="padding: 30px;"></div>
+    <div class="angle" id="hipAngleRight"></div>
+    <div style="padding: 30px;"></div>
+    <div class="angle" id="kneeAngleLeft"></div>
+    <div style="padding: 30px;"></div>
+    <div class="angle" id="kneeAngleRight"></div>
+  </div>
+  </div>
+</body>
+</html>
